@@ -23,6 +23,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'avatar',   // C-08 FIX: 'avatar' column (from migration 2026_06_18). 'avatar_path' in initial migration is unused.
         'id_divisi'
     ];
 

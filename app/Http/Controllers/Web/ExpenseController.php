@@ -243,12 +243,15 @@ class ExpenseController extends Controller
         $event = Event::visibleTo(auth()->user())->findOrFail($eventId);
 
         $request->validate([
-            'nama_pengeluaran' => 'required',
-            'id_expense_category' => 'required',
-            'nominal' => 'required|numeric',
-            'qty' => 'required|integer',
-            'bukti_nota' => 'nullable|image',
-            'nomor_rekening' => 'required|numeric'
+            'nama_pengeluaran' => 'required|string|max:255',
+            // H-04 FIX: Added exists validation — previously only 'required' (orphaned records possible)
+            'id_expense_category' => 'required|exists:expense_categories,id_expense_category',
+            'nominal' => 'required|numeric|min:0',
+            'qty' => 'required|integer|min:1',
+            // M-06 FIX: Changed from 'image' to file|mimes with explicit types and size limit; receipts may be PDF
+            'bukti_nota' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
+            // M-07 FIX: Validate as string with digit-only regex to preserve leading zeros in account numbers
+            'nomor_rekening' => 'required|string|regex:/^[0-9]+$/|max:30',
         ]);
 
         $path = null;
@@ -285,11 +288,12 @@ class ExpenseController extends Controller
         abort_unless($event->canManageOperationalBy(auth()->user()), 403, 'Anda tidak punya akses untuk mengubah expense ini.');
 
         $request->validate([
-            'nama_pengeluaran' => 'required',
-            'id_expense_category' => 'required',
-            'nominal' => 'required|numeric',
-            'qty' => 'required|integer',
-            'nomor_rekening' => 'required|numeric',
+            'nama_pengeluaran' => 'required|string|max:255',
+            'id_expense_category' => 'required|exists:expense_categories,id_expense_category',
+            'nominal' => 'required|numeric|min:0',
+            'qty' => 'required|integer|min:1',
+            // M-07 FIX: Use string with digit-only regex to preserve leading zeros
+            'nomor_rekening' => 'required|string|regex:/^[0-9]+$/|max:30',
         ]);
 
         $expense->update([

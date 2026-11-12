@@ -31,4 +31,9 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // L-06 FIX: Gemini API config (use config('services.gemini.key') in code)
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+    ],
+
 ];

@@ -15,7 +15,8 @@ class GeminiChatController extends Controller
         ]);
 
         $userMessage = $request->input('message');
-        $apiKey = env('GEMINI_API_KEY');
+        // L-06 FIX: Use config() instead of env() to support config caching
+        $apiKey = config('services.gemini.key');
 
         // Pastikan API Key sudah diset di .env
         if (!$apiKey) {
@@ -48,7 +49,12 @@ class GeminiChatController extends Controller
             return response()->json(['reply' => 'Gagal terhubung ke Gemini API.'], $response->status());
 
         } catch (\Exception $e) {
-            return response()->json(['reply' => 'Terjadi kesalahan sistem: ' . $e->getMessage()], 500);
+            // C-06 FIX: Log internally, never expose raw exception messages to users
+            \Log::error('GeminiChat error', [
+                'message' => $e->getMessage(),
+                'user_id' => auth()->id(),
+            ]);
+            return response()->json(['reply' => 'Terjadi kesalahan sistem. Silakan coba lagi.'], 500);
         }
     }
 }

@@ -32,27 +32,13 @@ use App\Http\Controllers\GeminiChatController;
 |
 */
 
-Route::get('/view-test', function () {
-    return [
-        'view' => app()->bound('view'),
-        'config' => app()->bound('config'),
-        'router' => app()->bound('router'),
-    ];
-});
+// C-01 FIX: Removed debug /view-test route (security risk — exposed app internals unauthenticated)
 
 Route::get('/', function () {
     return redirect('/login');
 });
 
-Route::get(
-    '/profile/password',
-    [ProfileController::class, 'passwordPage']
-)->name('profile.password');
-
-Route::put(
-    '/profile/password',
-    [ProfileController::class, 'updatePassword']
-)->name('profile.password.update');
+// C-02 FIX: Password routes moved into auth middleware group below
 
 
 // Route::get(
@@ -119,7 +105,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/events/{id}/edit', [EventController::class, 'edit']);
     Route::put('/events/{id}', [EventController::class, 'update']);
-    Route::get('/events/{id}/details', [EventController::class, 'show'])->name('events.details');
+    // L-03 FIX: Removed redundant /events/{id}/details alias (duplicate of events.show)
     Route::get('/events/{id}', [EventController::class, 'show'])->name('events.show');
     Route::delete('/events/{id}', [EventController::class, 'destroy']);
 
@@ -196,6 +182,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // C-02 FIX: Profile password routes now inside auth middleware
+    Route::get('/profile/password', [ProfileController::class, 'passwordPage'])->name('profile.password');
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
 });
 
 Route::middleware('auth')->group(function () {
@@ -216,12 +206,15 @@ Route::middleware('auth')->group(function () {
 });
 
 
-Route::get('/divisions', [DivisionController::class, 'index']);
-Route::post('/divisions', [DivisionController::class, 'store']);
-Route::prefix('divisions')->name('divisions.')->group(function () {
-    Route::get('/{id}/edit', [DivisionController::class, 'edit'])->name('edit');
-    Route::put('/{id}', [DivisionController::class, 'update'])->name('update');
-    Route::delete('/{id}', [DivisionController::class, 'destroy'])->name('destroy');
+// C-03 FIX: Division routes wrapped in auth middleware; CUD restricted to auth users (controller-level BPH check added separately)
+Route::middleware('auth')->group(function () {
+    Route::get('/divisions', [DivisionController::class, 'index']);
+    Route::post('/divisions', [DivisionController::class, 'store']);
+    Route::prefix('divisions')->name('divisions.')->group(function () {
+        Route::get('/{id}/edit', [DivisionController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [DivisionController::class, 'update'])->name('update');
+        Route::delete('/{id}', [DivisionController::class, 'destroy'])->name('destroy');
+    });
 });
 
 Route::get('/verify-certificate/{token}', [CertificateController::class, 'verify'])->name('certificate.verify');
@@ -240,8 +233,6 @@ Route::get(
     [DocumentationController::class, 'show']
 )->name('documentation.show');
 
-Route::post(
-    '/documentation/{event}',
-    [DocumentationController::class, 'store']
-)->name('documentation.store');
+// H-11 FIX: Removed duplicate documentation.store route (was registered twice with different URLs)
+// The canonical route is: POST /events/{event}/documentation (line 226 above)
 require __DIR__ . '/auth.php';

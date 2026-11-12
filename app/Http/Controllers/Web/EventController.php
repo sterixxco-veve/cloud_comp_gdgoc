@@ -15,6 +15,7 @@ use App\Models\Partner;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use App\Models\ExpenseReport;
 use App\Models\ExpenseCategory;
@@ -235,8 +236,10 @@ class EventController extends Controller
         'tujuan'             => 'nullable|string',
     ]);
 
-    // 2. AMBIL DATA EVENT BERDASARKAN ID
-    $event = Event::findOrFail($id);
+    // 2. AMBIL DATA EVENT BERDASARKAN ID + VALIDASI AKSES
+    // H-02 FIX: Added visibleTo() scope and canManageBy() check (previously any authenticated user could update any event by UUID)
+    $event = Event::visibleTo(auth()->user())->findOrFail($id);
+    abort_unless($event->canManageBy(auth()->user()), 403, 'Tidak punya akses untuk mengubah event ini.');
 
     // 3. UPDATE DATA KE DATABASE
     $event->update([
@@ -878,10 +881,14 @@ class EventController extends Controller
 
         $user = auth()->user();
 
-        $isSuperAdmin = \DB::table('organization_members')
+        // C-05 FIX: Use is_default flag instead of hardcoded id_divisi = 1
+        // This prevents breaking if BPH division gets a different integer ID in another environment.
+        $bphDivision = \App\Models\Division::where('is_default', 1)->first();
+
+        $isSuperAdmin = $bphDivision && \DB::table('organization_members')
             ->where('organization_id', $event->id_org)
             ->where('user_id', $user->id_user)
-            ->where('id_divisi', 1)
+            ->where('id_divisi', $bphDivision->id_divisi)
             ->exists();
 
         if (!$isSuperAdmin) {
@@ -1204,7 +1211,8 @@ class EventController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Validation error: ' . implode(', ', array_values(array_flatten($e->errors()))),
+                // H-12 FIX: array_flatten() was removed in Laravel 9+; use Arr::flatten() instead
+                'message' => 'Validation error: ' . implode(', ', Arr::flatten($e->errors())),
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
@@ -1264,8 +1272,13 @@ class EventController extends Controller
     }
     public function downloadCertificatesZip(Request $request, $eventId)
     {
+        // H-08 FIX: Added ownership + permission check (previously any authenticated user could download certs for any event)
+        $event = Event::visibleTo(auth()->user())->findOrFail($eventId);
+        abort_unless($event->canManageCertificateBy(auth()->user()), 403, 'Tidak punya akses untuk mengunduh sertifikat event ini.');
+
         $request->validate([
-            'cert_ids' => 'required|array|min:1'
+            'cert_ids' => 'required|array|min:1',
+            'cert_ids.*' => 'required|integer|exists:certificates,id_cert',
         ]);
 
         $certificates = Certificate::whereIn(
@@ -1298,7 +1311,8 @@ class EventController extends Controller
             storage_path('app/temp/' . $zipName);
 
         if (!file_exists(storage_path('app/temp'))) {
-            mkdir(storage_path('app/temp'), 0777, true);
+            // M-13 FIX: Use 0755 instead of 0777 (world-writable is a security risk)
+            mkdir(storage_path('app/temp'), 0755, true);
         }
 
         $zip = new ZipArchive();
